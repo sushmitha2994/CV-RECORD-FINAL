@@ -1,0 +1,102 @@
+import tensorflow as tf
+from tensorflow.keras import layers, models
+import numpy as np
+import matplotlib.pyplot as plt
+
+# 1. Start
+print("Training GAN for handwritten digits...")
+
+# 2. Load and preprocess data
+(x_train, _), (_, _) = tf.keras.datasets.mnist.load_data()
+x_train = x_train / 127.5 - 1.0  # Normalize to [-1, 1]
+x_train = x_train.reshape(-1, 784).astype(np.float32)
+
+# 3. Create generator model
+def build_generator():
+    model = models.Sequential([
+        layers.Dense(256, input_dim=100),
+        layers.LeakyReLU(0.2),
+        layers.Dense(512),
+        layers.LeakyReLU(0.2),
+        layers.Dense(1024),
+        layers.LeakyReLU(0.2),
+        layers.Dense(784, activation='tanh')
+    ])
+    return model
+
+# 4. Create discriminator model
+def build_discriminator():
+    model = models.Sequential([
+        layers.Dense(1024, input_dim=784),
+        layers.LeakyReLU(0.2),
+        layers.Dropout(0.3),
+        layers.Dense(512),
+        layers.LeakyReLU(0.2),
+        layers.Dropout(0.3),
+        layers.Dense(256),
+        layers.LeakyReLU(0.2),
+        layers.Dropout(0.3),
+        layers.Dense(1, activation='sigmoid')
+    ])
+    return model
+
+# Build models
+generator = build_generator()
+discriminator = build_discriminator()
+
+# Compile discriminator
+discriminator.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+# 5. Combine generator and discriminator into GAN
+z = layers.Input(shape=(100,))
+img = generator(z)
+discriminator.trainable = False
+validity = discriminator(img)
+gan = models.Model(z, validity)
+gan.compile(loss='binary_crossentropy', optimizer='adam')
+
+# 6. Training the GAN
+def train_gan(epochs, batch_size=128):
+    for epoch in range(epochs):
+        # Train discriminator
+        idx = np.random.randint(0, x_train.shape[0], batch_size)
+        real_imgs = x_train[idx]
+
+        noise = np.random.normal(0, 1, (batch_size, 100))
+        fake_imgs = generator.predict(noise)
+
+        d_loss_real = discriminator.train_on_batch(real_imgs, np.ones((batch_size, 1)))
+        d_loss_fake = discriminator.train_on_batch(fake_imgs, np.zeros((batch_size, 1)))
+        d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
+
+        # Train generator
+        noise = np.random.normal(0, 1, (batch_size, 100))
+        g_loss = gan.train_on_batch(noise, np.ones((batch_size, 1)))
+
+        # Print progress
+        print(f"Epoch {epoch+1}/{epochs} [D loss: {d_loss[0]:.4f}, acc: {100*d_loss[1]:.2f}%] [G loss: {g_loss:.4f}]")
+
+        # Plot generated images every 20 epochs
+        if (epoch + 1) % 20 == 0:
+            plot_generated_images(epoch + 1, generator)
+
+# Plotting function
+def plot_generated_images(epoch, generator, examples=16, dim=(4, 4)):
+    noise = np.random.normal(0, 1, (examples, 100))
+    gen_imgs = generator.predict(noise)
+    gen_imgs = 0.5 * gen_imgs + 0.5  # Scale back to [0,1]
+
+    plt.figure(figsize=(4, 4))
+    for i in range(examples):
+        plt.subplot(dim[0], dim[1], i+1)
+        plt.imshow(gen_imgs[i].reshape(28, 28), cmap='gray')
+        plt.axis('off')
+    plt.suptitle(f"Generated digits at epoch {epoch}")
+    plt.tight_layout()
+    plt.show()
+
+# Start training
+train_gan(epochs=100, batch_size=128)
+
+# 7. End
+print("GAN training completed.")
