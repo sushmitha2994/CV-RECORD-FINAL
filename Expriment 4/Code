@@ -1,0 +1,41 @@
+import torch
+import cv2
+import numpy as np
+from PIL import Image
+# Import the necessary patch for displaying images in Colab
+from google.colab.patches import cv2_imshow
+
+# Load the YOLOv5 model
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+
+# Load an image using OpenCV
+image_path = '/content/exp 4.jpg'  # Replace with your image path
+img = cv2.imread(image_path)
+
+# Convert the image to RGB (YOLOv5 expects RGB format)
+img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+# Convert to PIL Image (YOLOv5 expects PIL format)
+pil_img = Image.fromarray(img_rgb)
+
+# Perform object detection
+results = model(pil_img)
+
+# Display results
+results.show()  # This will show the image with bounding boxes
+
+# Convert results to pandas DataFrame
+df = results.pandas().xyxy[0]  # Bounding box coordinates
+print(df)  # Print detected objects and their coordinates
+
+# Draw bounding boxes
+for index, row in df.iterrows():
+    x1, y1, x2, y2, conf, cls, label = int(row['xmin']), int(row['ymin']), int(row['xmax']), int(row['ymax']), row['confidence'], int(row['class']), row['name']
+    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    cv2.putText(img, f'{label} {conf:.2f}', (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+# Display the image with bounding boxes using cv2_imshow
+# Instead of cv2.imshow('Object Detection', img)
+cv2_imshow(img)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
